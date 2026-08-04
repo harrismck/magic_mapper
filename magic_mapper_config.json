@@ -78,5 +78,11 @@
     "inputs": {
       "app_id": "cdp-30"
     }
+  },
+  "EXAMPLE - replace this text with a button name (ie 'record') to toggle bluetooth on/off": {
+    "function": "toggle_bluetooth",
+    "inputs": {
+      "notifications": true
+    }
   }
 }

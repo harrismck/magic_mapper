@@ -362,10 +362,101 @@ def toggle_piccap(inputs):
     luna_send(endpoint, {})
     print("PicCap service %s" % action)
 
+
+def toggle_bluetooth(inputs):
+    """Toggle the WebOS bluetooth service on or off.
+
+    Disabling bluetooth turns the Magic Remote into an IR-only remote (only the
+    IR functions keep working), but stops unwanted bluetooth connection requests.
+    This starts/stops the same webos-bluetooth-service that the webOS Bluetooth
+    Disabler app controls; magic_mapper already runs as root so it can call the
+    init system directly instead of going through the Homebrew Channel service.
+
+    Inputs:
+        notifications (bool, default: False) - show a toast with the new state
+    """
+    init_system = get_init_system()
+    if not init_system:
+        print("ERROR: could not determine init system, cannot toggle bluetooth")
+        return
+
+    active = bluetooth_is_active(init_system)
+
+    if active:
+        new_state = "off"
+        if init_system == "systemd":
+            command = ["systemctl", "stop", "webos-bluetooth-service.service"]
+        else:
+            command = ["stop", "webos-bluetooth-service"]
+    else:
+        new_state = "on"
+        if init_system == "systemd":
+            command = ["systemctl", "start", "webos-bluetooth-service.service"]
+        else:
+            command = ["start", "webos-bluetooth-service"]
+
+    print("Bluetooth service is %s, turning it %s" % (
+        "active" if active else "inactive", new_state))
+
+    try:
+        subprocess.check_call(command)
+    except (subprocess.CalledProcessError, OSError) as error:
+        print("WARNING: failed to toggle bluetooth: %s" % error)
+        return
+
+    print("Bluetooth turned %s" % new_state)
+    if inputs.get("notifications"):
+        show_message("Bluetooth: %s" % new_state)
+
 ###################################
 # Private Functions
 # The fuctions below here should not be called by magic_mapper_config.json
 ####################################
+
+
+def get_init_system():
+    """Detect whether the TV uses systemd or upstart.
+
+    Mirrors the detection the webOS Bluetooth Disabler scripts do with
+    `stat /sbin/init`. Returns "systemd", "upstart", or None if unknown.
+    """
+    try:
+        stat_output = subprocess.check_output(["stat", "/sbin/init"])
+    except (subprocess.CalledProcessError, OSError) as error:
+        print("WARNING: could not stat /sbin/init: %s" % error)
+        return None
+
+    stat_output = stat_output.decode("utf-8", "replace")
+    if "systemd" in stat_output:
+        return "systemd"
+    if "upstart" in stat_output:
+        return "upstart"
+    return None
+
+
+def bluetooth_is_active(init_system):
+    """Return True if the webos-bluetooth-service is currently running."""
+    if init_system == "systemd":
+        # `systemctl is-active` prints "active" and exits 0 when running, or
+        # prints "inactive"/"failed" and exits non-zero when not.
+        try:
+            output = subprocess.check_output(
+                ["systemctl", "is-active", "webos-bluetooth-service.service"])
+        except subprocess.CalledProcessError as error:
+            output = error.output or b""
+        except OSError as error:
+            print("WARNING: could not query bluetooth status: %s" % error)
+            return False
+        return output.decode("utf-8", "replace").strip() == "active"
+
+    # upstart: `status webos-bluetooth-service` prints "... start/running"
+    # when up and "... stop/waiting" when down.
+    try:
+        output = subprocess.check_output(["status", "webos-bluetooth-service"])
+    except (subprocess.CalledProcessError, OSError) as error:
+        print("WARNING: could not query bluetooth status: %s" % error)
+        return False
+    return "start/running" in output.decode("utf-8", "replace")
 
 
 def get_button_map():

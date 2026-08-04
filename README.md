@@ -25,6 +25,7 @@ The script has support to do the the following (default config button):
 - [Disable the Magic Remote mouse](#disable-mouse-experimental) (EXPERIMENTAL)
 - [Send a TCP command](#send_tcp_command) (not configured by default)
 - [Toggle PicCap](#toggle_piccap) (not configured by default)
+- [Toggle Bluetooth](#toggle_bluetooth) on/off (not configured by default)
 
 ## TV Models supported (Likely any LG TV after 2018 are supported until this stops working with unknown future models)
 
@@ -428,6 +429,23 @@ To disable the mouse, edit the script and change `BLOCK_MOUSE = True` near the t
   ```
   "blue": {
     "function": "toggle_piccap"
+  }
+  ```
+
+### toggle_bluetooth
+
+- Toggles the WebOS bluetooth service (`webos-bluetooth-service`) on or off. If bluetooth is running it is stopped, otherwise it is started.
+- Magic_mapper already runs as root, so it starts/stops the bluetooth service directly (systemd or upstart is detected automatically).
+- Note: disabling bluetooth turns the Magic Remote into an IR-only remote. Only IR functions will keep working until bluetooth is turned back on, so bind this to a button your IR remote can still send (or be ready to re-enable it another way).
+- Inputs:
+  - `notifications` (bool, default: `false`): show a toast with the new bluetooth state
+- Example:
+  ```
+  "record": {
+    "function": "toggle_bluetooth",
+    "inputs": {
+      "notifications": true
+    }
   }
   ```
 
