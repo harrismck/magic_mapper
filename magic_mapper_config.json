@@ -79,7 +79,7 @@
       "app_id": "cdp-30"
     }
   },
-  "EXAMPLE - replace this text with a button name (ie 'record') to toggle bluetooth on/off": {
+  "EXAMPLE - replace this text with an IR-capable button name (ie a number like '8') to toggle bluetooth on/off. IR-capable buttons can also turn bluetooth back ON from the remote via the IR fallback": {
     "function": "toggle_bluetooth",
     "inputs": {
       "notifications": true
