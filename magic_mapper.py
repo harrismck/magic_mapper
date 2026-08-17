@@ -23,6 +23,15 @@ DEVICE_NAME = 'LGE M-RCU - Builtin [0]'   # the exact Name= shown in /proc/bus/i
 
 OUTPUT_DEVICE_NAME = 'LGE M-RCU - Builtin [2]'  # unbound codes get resent to this device in exclusive mode
 
+# On webOS 25 (major version 10+) the Builtin [2] passthrough above mangles
+# relayed events: an unbound Back press gets reinterpreted as Exit (jumping to
+# the home screen), and held keys like volume don't get a clean release (the
+# volume OSD can stick on screen). Resending through Builtin [1] instead
+# preserves the original remote semantics. See get_output_device_name() and the
+# Back handling in handle_event(). Ported from andrewfraley/magic_mapper#37.
+WEBOS_25_OUTPUT_DEVICE_NAME = 'LGE M-RCU - Builtin [1]'
+WEBOS_25_BACK_CODE = 412
+
 # When Bluetooth is turned off the Magic Remote falls back to IR, and those
 # presses arrive on this separate IR receiver device instead of the Bluetooth
 # "LGE M-RCU - Builtin [0]" device above. Listening to it lets mapped buttons
@@ -588,6 +597,29 @@ def send_keystroke(device, keycode):
     send_input_event(device, 0, 0, 0)
 
 
+def send_clean_keypress(device, keycode):
+    """Send one complete keypress (down + up) using fresh event timestamps.
+
+    Used for the webOS 25 Back fix: instead of relaying the remote's original
+    Back events (which webOS turns into Exit), we drop those and inject a clean
+    press here so webOS treats it as a real Back. Ported from
+    andrewfraley/magic_mapper#37.
+    """
+    input_format = "llHHi"
+    out_file = os.open(device, os.O_WRONLY)
+    try:
+        for value in (1, 0):
+            now = time.time()
+            tv_sec = int(now)
+            tv_usec = int((now - tv_sec) * 1000000)
+            os.write(out_file, struct.pack(input_format, tv_sec, tv_usec, 1, keycode, value))
+            os.write(out_file, struct.pack(input_format, tv_sec, tv_usec, 0, 0, 0))
+            if value == 1:
+                time.sleep(0.08)
+    finally:
+        os.close(out_file)
+
+
 def send_input_event(device, keycode, value, event_type):
     """Low level function to write to the input device file
     Don't call this from magic_mapper_config.json
@@ -624,6 +656,19 @@ def get_webos_version():
     version = release.split()[2]
     major_version = version.split(".")[0]
     return int(major_version)
+
+
+def get_output_device_name():
+    """Return the passthrough device that preserves remote semantics.
+
+    On webOS 25 (major version 10+), relaying unbound presses through
+    Builtin [2] breaks them (Back becomes Exit, the volume OSD sticks), so we
+    resend through Builtin [1] instead. Ported from
+    andrewfraley/magic_mapper#37.
+    """
+    if WEBOS_MAJOR_VERSION >= 10:
+        return WEBOS_25_OUTPUT_DEVICE_NAME
+    return OUTPUT_DEVICE_NAME
 
 
 def open_source_device(device_name, grab):
@@ -689,11 +734,13 @@ def input_loop(button_map):
         return
 
     if EXCLUSIVE_MODE:
-        output_device_path = resolve_input_device_by_name(OUTPUT_DEVICE_NAME)
+        output_device_name = get_output_device_name()
+        output_device_path = resolve_input_device_by_name(output_device_name)
         print("Keys will be resent to: %s" % output_device_path)
         output_device = os.open(output_device_path, os.O_WRONLY)
     else:
         print("EXCLUSIVE_MODE is disabled, will not override default button behavior")
+        output_device_path = None
         output_device = None
 
     print("Input loop started, waiting for button presses on %d device(s)" % len(sources))
@@ -706,12 +753,32 @@ def input_loop(button_map):
             event = device_file.read(event_size)
             if not event:
                 continue
-            handle_event(event, input_format, source, button_map, buttons_waiting, output_device)
+            handle_event(event, input_format, source, button_map, buttons_waiting, output_device, output_device_path)
 
 
-def handle_event(event, input_format, source, button_map, buttons_waiting, output_device):
+def handle_event(event, input_format, source, button_map, buttons_waiting, output_device, output_device_path):
     """Process a single input event read from one of the source devices."""
     (tv_sec, tv_usec, event_type, code, value) = struct.unpack(input_format, event)
+
+    # webOS 25 Back fix (see WEBOS_25_OUTPUT_DEVICE_NAME): relaying the remote's
+    # own Back events through the passthrough device makes webOS treat Back as
+    # Exit (jumping to the home screen). For the grabbed primary device we drop
+    # the raw Back down/up events (and the SYN that follows the down) and inject
+    # a clean synthetic Back press on the up instead. Ungrabbed devices (the IR
+    # fallback) deliver Back to the OS directly, so they don't need this.
+    # Ported from andrewfraley/magic_mapper#37.
+    if source.get("suppress_next_sync") and event_type == 0:
+        source["suppress_next_sync"] = False
+        return
+
+    if (source["grabbed"] and EXCLUSIVE_MODE and WEBOS_MAJOR_VERSION >= 10
+            and event_type == 1 and code == WEBOS_25_BACK_CODE):
+        if value == 1:
+            source["suppress_next_sync"] = True
+        elif value == 0:
+            print("Replaying Back as a clean webOS 25 keypress")
+            send_clean_keypress(output_device_path, code)
+        return
 
     now = time.time()
     key = None
