@@ -65,6 +65,29 @@ chmod +x /var/lib/webosbrew/init.d/start_magic_mapper
 - Edit magic_mapper_config.json as needed
 - Lastly, reboot the TV (execute the reboot command over SSH, or open the homebrew app, click the cog, click the reboot link.)
 
+## Deploying from a cloned repo
+
+If you work from a clone of this repository (instead of `wget`-ing the files
+individually), `deploy_to_tv.sh` copies `magic_mapper.py`, `list_apps.py`,
+`start_magic_mapper` and your config to the TV in one step, verifies every file's
+checksum after transfer, and restarts the service only if all of them match:
+
+```bash
+./deploy_to_tv.sh <tv-host-or-ip>
+```
+
+- The TV only answers SSH while it is **on** (not in standby).
+- Authentication uses your SSH key/agent if available, otherwise it prompts for
+  the root password. Point at a specific key with `-i ~/.ssh/your_key`.
+- By default it deploys `magic_mapper_config.json`. If a (gitignored)
+  `magic_mapper_config-mine.json` exists it deploys that instead, so you can keep
+  a personal config with tokens out of git; override with `-c <file>`.
+- Other options: `-u <user>` (default `root`), `-p <port>` (default `22`). See
+  `./deploy_to_tv.sh --help`.
+
+It works for first-time installs and upgrades alike. Reboot once afterward to
+confirm Magic Mapper auto-starts.
+
 ## Upgrading
 
 Read the upgrade notes below for any changes you need to make, then download the new magic_mapper.py and start_magic_mapper for the version you want (replace v1.0.0 below). Don't download magic_mapper_config.json again, your existing config keeps working.
@@ -217,6 +240,39 @@ If you wanted to replace the Amazon Prime button with Plex:
 ```
 
 - Now when you press the Prime button, Plex will launch instead.
+
+## Holding a button (repeat)
+
+By default a mapped button fires once when released, and holding it (longer than
+1s) is ignored — you get a toast saying the long press was blocked. To make a
+button repeat its action while held, add `"repeat": true` to its action. It then
+fires once on press and again on each auto-repeat tick while you hold it, with no
+long-press toast.
+
+Optional inputs for a repeating button:
+
+- `repeat_interval` (seconds, default `0`): the minimum time between repeats while
+  held. `0` fires on every auto-repeat tick (fastest); raise it to slow the rate.
+- `repeat_increment`: for actions that take an `increment` (such as
+  `increase_oled_light` / `reduce_oled_light`), use a different — usually smaller —
+  increment while held than on a single press.
+
+Example — tap `ch_up` for a coarse +10 brightness step, or hold it to ramp
+smoothly by 1:
+
+```
+  "ch_up": {
+    "function": "increase_oled_light",
+    "repeat": true,
+    "inputs": {
+      "increment": 10,
+      "repeat_increment": 1
+    }
+  }
+```
+
+If only some actions on a button set `"repeat": true`, the whole button is treated
+as repeating.
 
 ## Logs
 
@@ -548,9 +604,9 @@ Behavior and caveats:
 
 List of known buttons and their codes. Not all remote buttons are on this list, but if needed, you can modify magic_mapper.py to add other button codes. Just run magic_mapper.py manually and it will list all button codes it sees.
 
-Note that long presses (longer than 1s) are ignored. I will eventually add support for different actions based on short vs long press.
+Note that long presses (longer than 1s) on a mapped button are ignored by default (you'll get a toast), unless the button is configured to repeat — see [Holding a button (repeat)](#holding-a-button-repeat).
 
-Note that key repeats are not forwarded for buttons you have mapped, so holding down a mapped button (the direction keys in particular) will not repeat the way it does normally.
+Note that, by default, key repeats are not forwarded for buttons you have mapped, so holding down a mapped button (the direction keys in particular) will not repeat the way it does normally. To opt a button into repeating while held, see [Holding a button (repeat)](#holding-a-button-repeat).
 
 ```
  "red"

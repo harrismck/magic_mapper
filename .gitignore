@@ -132,8 +132,5 @@ dmypy.json
 magic_mapper_config-mine.json
 real_config.json
 
-# Local deploy helper (references the TV's LAN IP)
-deploy_to_tv.sh
-
 # JetBrains IDE
 .idea/
