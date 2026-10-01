@@ -1,0 +1,7 @@
+# These files are deployed to / run on the Linux (webOS) TV. They MUST use LF
+# line endings: a CRLF shebang (e.g. "#!/bin/bash\r") makes the kernel look for
+# an interpreter named "/bin/bash\r" and fail with "not found". This overrides
+# core.autocrlf=true on Windows checkouts.
+*.sh        text eol=lf
+*.py        text eol=lf
+start_magic_mapper text eol=lf
