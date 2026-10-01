@@ -72,7 +72,15 @@ done
 echo "Deploying to ${TV_USER}@${TV_HOST}:${PORT}, config: $CONFIG"
 
 # --- Validate locally before touching the TV (best effort) ---------------------
-PY="$(command -v python3 || command -v python || true)"
+# Pick a Python that actually runs. On Windows, `python3`/`python` may be the
+# Microsoft Store app-execution stub, which is on PATH but exits non-zero, so we
+# test each candidate instead of trusting `command -v`.
+PY=""
+for cand in python3 python; do
+  if command -v "$cand" >/dev/null 2>&1 && "$cand" -c "import sys" >/dev/null 2>&1; then
+    PY="$cand"; break
+  fi
+done
 if [ -n "$PY" ]; then
   "$PY" -c "import json,sys; json.load(open(sys.argv[1]))" "$CONFIG" \
     || { echo "ERROR: $CONFIG is not valid JSON" >&2; exit 1; }
