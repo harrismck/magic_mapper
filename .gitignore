@@ -128,4 +128,12 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+# Personal config — may contain Home Assistant tokens; never commit (public fork)
 magic_mapper_config-mine.json
+real_config.json
+
+# Local deploy helper (references the TV's LAN IP)
+deploy_to_tv.sh
+
+# JetBrains IDE
+.idea/
